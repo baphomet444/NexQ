@@ -308,3 +308,29 @@ pub fn create_lm_studio_client(base_url: Option<&str>) -> OpenAICompatClient {
         extra_headers: vec![],
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::llm::test_support::serve_500_with_body;
+
+    #[test]
+    fn provider_http_error_body_is_redacted() {
+        let secret = "sk-FAKETESTKEY0123456789abcdefXYZ";
+        let body = Box::leak(format!("{{\"error\":\"bad key {secret}\"}}").into_boxed_str());
+        let client = OpenAICompatClient::new(OpenAICompatConfig {
+            provider_name: "test".into(),
+            base_url: serve_500_with_body(body),
+            auth_header: None,
+            auth_value: None,
+            extra_headers: vec![],
+        });
+        let err = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(client.list_models())
+            .expect_err("500 must surface as an error");
+        let msg = err.to_string();
+        assert!(!msg.contains(secret), "credential leaked: {msg}");
+        assert!(msg.contains("[redacted]"), "{msg}");
+    }
+}

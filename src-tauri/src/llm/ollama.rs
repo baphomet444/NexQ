@@ -265,27 +265,7 @@ impl LLMProvider for OllamaClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::{Read, Write};
-
-    /// Serves one HTTP 500 whose body echoes a credential, like a real
-    /// upstream error might. Returns the base URL to point the client at.
-    fn serve_500_with_body(body: &'static str) -> String {
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let addr = listener.local_addr().unwrap();
-        std::thread::spawn(move || {
-            if let Ok((mut stream, _)) = listener.accept() {
-                let mut buf = [0u8; 4096];
-                let _ = stream.read(&mut buf);
-                let resp = format!(
-                    "HTTP/1.1 500 Internal Server Error\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                    body.len(),
-                    body
-                );
-                let _ = stream.write_all(resp.as_bytes());
-            }
-        });
-        format!("http://{addr}")
-    }
+    use crate::llm::test_support::serve_500_with_body;
 
     #[test]
     fn provider_http_error_body_is_redacted() {

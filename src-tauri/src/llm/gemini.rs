@@ -341,3 +341,23 @@ impl LLMProvider for GeminiClient {
         Ok(stats)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::llm::test_support::serve_500_with_body;
+
+    #[test]
+    fn provider_http_error_body_is_redacted() {
+        let secret = "sk-FAKETESTKEY0123456789abcdefXYZ";
+        let body = Box::leak(format!("{{\"error\":\"bad key {secret}\"}}").into_boxed_str());
+        let client = GeminiClient::new("key", Some(&serve_500_with_body(body)));
+        let err = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(client.list_models())
+            .expect_err("500 must surface as an error");
+        let msg = err.to_string();
+        assert!(!msg.contains(secret), "credential leaked: {msg}");
+        assert!(msg.contains("[redacted]"), "{msg}");
+    }
+}

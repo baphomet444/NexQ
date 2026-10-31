@@ -352,3 +352,28 @@ mod tests {
         assert!(create_provider(&cfg("nope", None, None)).is_err());
     }
 }
+
+/// Test-only helper: a one-shot local HTTP server that answers 500 with `body`.
+/// Returns its base URL. Lets provider tests check real error paths offline.
+#[cfg(test)]
+pub(crate) mod test_support {
+    use std::io::{Read, Write};
+
+    pub fn serve_500_with_body(body: &'static str) -> String {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        std::thread::spawn(move || {
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buf = [0u8; 4096];
+                let _ = stream.read(&mut buf);
+                let resp = format!(
+                    "HTTP/1.1 500 Internal Server Error\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = stream.write_all(resp.as_bytes());
+            }
+        });
+        format!("http://{addr}")
+    }
+}
